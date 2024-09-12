@@ -60,6 +60,10 @@ typedef enum {
         RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_MAX,
         RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_AVG,
         RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_MAX,
+        RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_REQUEST_LATENCY_AVG,
+        RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_REQUEST_LATENCY_MAX,
+        RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_PRODUCE_REQUEST_LATENCY_AVG,
+        RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_PRODUCE_REQUEST_LATENCY_MAX,
         RD_KAFKA_TELEMETRY_PRODUCER_METRIC__CNT
 } rd_kafka_telemetry_producer_metric_name_t;
 
@@ -103,68 +107,98 @@ typedef struct {
         const char *(*getValue)(const rd_kafka_t *rk);
 } rd_kafka_telemetry_attribute_config_t;
 
-static const rd_kafka_telemetry_metric_info_t
-    RD_KAFKA_TELEMETRY_PRODUCER_METRICS_INFO
-        [RD_KAFKA_TELEMETRY_PRODUCER_METRIC__CNT] = {
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_CONNECTION_CREATION_RATE] =
-                {.name = "producer.connection.creation.rate",
-                 .description =
-                     "The rate of connections established per second.",
-                 .unit          = "1",
-                 .is_int        = rd_false,
-                 .is_per_broker = rd_false,
-                 .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_CONNECTION_CREATION_TOTAL] =
-                {.name        = "producer.connection.creation.total",
-                 .description = "The total number of connections established.",
-                 .unit        = "1",
-                 .is_int      = rd_true,
-                 .is_per_broker = rd_false,
-                 .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_SUM},
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_REQUEST_LATENCY_AVG] =
-                {.name        = "producer.node.request.latency.avg",
-                 .description = "The average request latency in ms for a node.",
-                 .unit        = "ms",
-                 .is_int      = rd_false,
-                 .is_per_broker = rd_true,
-                 .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_REQUEST_LATENCY_MAX] =
-                {.name        = "producer.node.request.latency.max",
-                 .description = "The maximum request latency in ms for a node.",
-                 .unit        = "ms",
-                 .is_int      = rd_true,
-                 .is_per_broker = rd_true,
-                 .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_AVG] =
-                {.name          = "producer.produce.throttle.time.avg",
-                 .description   = "The average throttle time in ms for a node.",
-                 .unit          = "ms",
-                 .is_int        = rd_false,
-                 .is_per_broker = rd_false,
-                 .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_MAX] =
-                {.name          = "producer.produce.throttle.time.max",
-                 .description   = "The maximum throttle time in ms for a node.",
-                 .unit          = "ms",
-                 .is_int        = rd_true,
-                 .is_per_broker = rd_false,
-                 .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_AVG] =
-                {.name        = "producer.record.queue.time.avg",
-                 .description = "The average time in ms a record spends in the "
-                                "producer queue.",
-                 .unit          = "ms",
-                 .is_int        = rd_false,
-                 .is_per_broker = rd_false,
-                 .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_MAX] =
-                {.name        = "producer.record.queue.time.max",
-                 .description = "The maximum time in ms a record spends in the "
-                                "producer queue.",
-                 .unit          = "ms",
-                 .is_int        = rd_true,
-                 .is_per_broker = rd_false,
-                 .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+static const rd_kafka_telemetry_metric_info_t RD_KAFKA_TELEMETRY_PRODUCER_METRICS_INFO
+    [RD_KAFKA_TELEMETRY_PRODUCER_METRIC__CNT] = {
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_CONNECTION_CREATION_RATE] =
+            {.name          = "producer.connection.creation.rate",
+             .description   = "The rate of connections established per second.",
+             .unit          = "1",
+             .is_int        = rd_false,
+             .is_per_broker = rd_false,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_CONNECTION_CREATION_TOTAL] =
+            {.name          = "producer.connection.creation.total",
+             .description   = "The total number of connections established.",
+             .unit          = "1",
+             .is_int        = rd_true,
+             .is_per_broker = rd_false,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_SUM},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_REQUEST_LATENCY_AVG] =
+            {.name          = "producer.node.request.latency.avg",
+             .description   = "The average request latency in ms for a node.",
+             .unit          = "ms",
+             .is_int        = rd_false,
+             .is_per_broker = rd_true,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_REQUEST_LATENCY_MAX] =
+            {.name          = "producer.node.request.latency.max",
+             .description   = "The maximum request latency in ms for a node.",
+             .unit          = "ms",
+             .is_int        = rd_true,
+             .is_per_broker = rd_true,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_AVG] =
+            {.name          = "producer.produce.throttle.time.avg",
+             .description   = "The average throttle time in ms for a node.",
+             .unit          = "ms",
+             .is_int        = rd_false,
+             .is_per_broker = rd_false,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_MAX] =
+            {.name          = "producer.produce.throttle.time.max",
+             .description   = "The maximum throttle time in ms for a node.",
+             .unit          = "ms",
+             .is_int        = rd_true,
+             .is_per_broker = rd_false,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_AVG] =
+            {.name        = "producer.record.queue.time.avg",
+             .description = "The average time in ms a record spends in the "
+                            "producer queue.",
+             .unit          = "ms",
+             .is_int        = rd_false,
+             .is_per_broker = rd_false,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_MAX] =
+            {.name        = "producer.record.queue.time.max",
+             .description = "The maximum time in ms a record spends in the "
+                            "producer queue.",
+             .unit          = "ms",
+             .is_int        = rd_true,
+             .is_per_broker = rd_false,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_REQUEST_LATENCY_AVG] =
+            {.name = "producer.produce.request.latency.avg",
+             .description =
+                 "The average request latency in ms for a produce request.",
+             .unit          = "ms",
+             .is_int        = rd_false,
+             .is_per_broker = rd_false,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_REQUEST_LATENCY_MAX] =
+            {.name = "producer.produce.request.latency.max",
+             .description =
+                 "The maximum request latency in ms for a produce request.",
+             .unit          = "ms",
+             .is_int        = rd_true,
+             .is_per_broker = rd_false,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_PRODUCE_REQUEST_LATENCY_AVG] =
+            {.name        = "producer.node.produce.request.latency.avg",
+             .description = "The average request latency in ms for a produce "
+                            "request to a node.",
+             .unit          = "ms",
+             .is_int        = rd_false,
+             .is_per_broker = rd_true,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
+        [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_PRODUCE_REQUEST_LATENCY_MAX] =
+            {.name        = "producer.node.produce.request.latency.max",
+             .description = "The maximum request latency in ms for a produce "
+                            "request to a node.",
+             .unit          = "ms",
+             .is_int        = rd_true,
+             .is_per_broker = rd_true,
+             .type          = RD_KAFKA_TELEMETRY_METRIC_TYPE_GAUGE},
 };
 
 static const rd_kafka_telemetry_metric_info_t

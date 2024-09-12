@@ -698,6 +698,14 @@ struct rd_kafka_s {
                                            *   started */
                 } rk_historic_c;
 
+                struct {
+                        rd_avg_t rk_produce_avg_rtt;
+                } rd_avg_current;
+
+                struct {
+                        rd_avg_t rk_produce_avg_rtt;
+                } rd_avg_rollover;
+
         } rk_telemetry;
 
         /* Test mocks */

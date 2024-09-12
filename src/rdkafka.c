@@ -940,6 +940,13 @@ void rd_kafka_destroy_final(rd_kafka_t *rk) {
         rd_kafka_wrlock(rk);
         rd_kafka_wrunlock(rk);
 
+        if (rk->rk_type == RD_KAFKA_PRODUCER) {
+                rd_avg_destroy(
+                    &rk->rk_telemetry.rd_avg_current.rk_produce_avg_rtt);
+                rd_avg_destroy(
+                    &rk->rk_telemetry.rd_avg_rollover.rk_produce_avg_rtt);
+        }
+
         rd_kafka_telemetry_clear(rk, rd_true /*clear_control_flow_fields*/);
 
         /* Terminate SASL provider */
@@ -2275,6 +2282,14 @@ rd_kafka_t *rd_kafka_new(rd_kafka_type_t type,
 
         mtx_init(&rk->rk_telemetry.lock, mtx_plain);
         cnd_init(&rk->rk_telemetry.termination_cnd);
+
+        if (rk->rk_type == RD_KAFKA_PRODUCER) {
+                rd_avg_init(&rk->rk_telemetry.rd_avg_current.rk_produce_avg_rtt,
+                            RD_AVG_GAUGE, 0, 500 * 1000, 2, rd_true);
+                rd_avg_init(
+                    &rk->rk_telemetry.rd_avg_rollover.rk_produce_avg_rtt,
+                    RD_AVG_GAUGE, 0, 500 * 1000, 2, rd_true);
+        }
 
         rd_atomic64_init(&rk->rk_ts_last_poll, rk->rk_ts_created);
         rd_atomic32_init(&rk->rk_flushing, 0);

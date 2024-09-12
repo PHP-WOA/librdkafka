@@ -114,6 +114,10 @@ static void test_telemetry_check_protocol_request_times(
                 }
                 expected_idx++;
         }
+        if (expected_idx < expected_cnt) {
+                TEST_FAIL("Expected %lu requests, got %lu", expected_cnt,
+                          expected_idx);
+        }
 }
 
 static void test_clear_request_list(rd_kafka_mock_request_t **requests,
@@ -468,13 +472,13 @@ void do_test_subscription_id_change(void) {
              .broker_id        = -1,
              .expected_diff_ms = push_interval,
              .jitter_percent   = 20},
-            /* T = 2*push_interval + jitter : The second PushTelemetry request,
+            /* T = 2*push_interval  : The second PushTelemetry request,
              * which will fail with unknown subscription id.
              */
             {.ApiKey           = RD_KAFKAP_PushTelemetry,
              .broker_id        = -1,
              .expected_diff_ms = push_interval,
-             .jitter_percent   = 20},
+             .jitter_percent   = 0},
             /* New GetTelemetrySubscriptions request will be sent immediately.
              */
             {.ApiKey           = RD_KAFKAP_GetTelemetrySubscriptions,
@@ -525,6 +529,78 @@ void do_test_subscription_id_change(void) {
         SUB_TEST_PASS();
 }
 
+
+/**
+ * @brief Invalid record from broker should stop metrics
+ */
+void do_test_invalid_record(void) {
+        rd_kafka_conf_t *conf;
+        const char *bootstraps;
+        rd_kafka_mock_cluster_t *mcluster;
+        char *expected_metrics[]           = {"*"};
+        rd_kafka_t *producer               = NULL;
+        rd_kafka_mock_request_t **requests = NULL;
+        size_t request_cnt;
+        const int64_t push_interval = 1000;
+
+        rd_kafka_telemetry_expected_request_t requests_expected[] = {
+            /* T= 0 : The initial GetTelemetrySubscriptions request. */
+            {.ApiKey           = RD_KAFKAP_GetTelemetrySubscriptions,
+             .broker_id        = -1,
+             .expected_diff_ms = -1,
+             .jitter_percent   = 0},
+            /* T = push_interval + jitter : The first PushTelemetry request,
+             * sent to the preferred broker 1.
+             */
+            {.ApiKey           = RD_KAFKAP_PushTelemetry,
+             .broker_id        = -1,
+             .expected_diff_ms = push_interval,
+             .jitter_percent   = 20},
+            /* T = 2*push_interval  : The second PushTelemetry request,
+             * which will fail with RD_KAFKA_RESP_ERR_INVALID_RECORD and no
+             * further telemetry requests would be sent.
+             */
+            {.ApiKey           = RD_KAFKAP_PushTelemetry,
+             .broker_id        = -1,
+             .expected_diff_ms = push_interval,
+             .jitter_percent   = 0},
+        };
+        SUB_TEST();
+
+        mcluster = test_mock_cluster_new(1, &bootstraps);
+
+        rd_kafka_mock_telemetry_set_requested_metrics(mcluster,
+                                                      expected_metrics, 1);
+        rd_kafka_mock_telemetry_set_push_interval(mcluster, push_interval);
+        rd_kafka_mock_start_request_tracking(mcluster);
+
+        test_conf_init(&conf, NULL, 30);
+        test_conf_set(conf, "bootstrap.servers", bootstraps);
+        test_conf_set(conf, "debug", "telemetry");
+        producer = test_create_handle(RD_KAFKA_PRODUCER, conf);
+        test_poll_timeout(producer, push_interval * 1.2);
+
+        rd_kafka_mock_push_request_errors(mcluster, RD_KAFKAP_PushTelemetry, 1,
+                                          RD_KAFKA_RESP_ERR_INVALID_RECORD);
+
+        test_poll_timeout(producer, push_interval * 2.5);
+
+        requests = rd_kafka_mock_get_requests(mcluster, &request_cnt);
+
+        test_telemetry_check_protocol_request_times(
+            requests, request_cnt, requests_expected,
+            RD_ARRAY_SIZE(requests_expected));
+
+        /* Clean up. */
+        rd_kafka_mock_stop_request_tracking(mcluster);
+        test_clear_request_list(requests, request_cnt);
+        rd_kafka_destroy(producer);
+        test_mock_cluster_destroy(mcluster);
+
+        SUB_TEST_PASS();
+}
+
+
 int main_0150_telemetry_mock(int argc, char **argv) {
 
         if (test_needs_auth()) {
@@ -545,6 +621,8 @@ int main_0150_telemetry_mock(int argc, char **argv) {
         do_test_telemetry_preferred_broker_change();
 
         do_test_subscription_id_change();
+
+        do_test_invalid_record();
 
         return 0;
 }

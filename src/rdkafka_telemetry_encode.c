@@ -42,6 +42,16 @@ typedef struct {
         size_t count;
 } rd_kafka_telemetry_key_values_repeated_t;
 
+static double calculate_avg(rd_avg_t *avg, double scale_factor) {
+        if (avg->ra_v.cnt) {
+                return avg->ra_v.sum / (double)(avg->ra_v.cnt * scale_factor);
+        }
+        return 0.0;
+}
+
+static int64_t calculate_max(rd_avg_t *avg, int64_t scale_factor) {
+        return RD_CEIL_INTEGER_DIVISION(avg->ra_v.maxv, scale_factor);
+}
 
 static rd_kafka_telemetry_metric_value_t
 calculate_connection_creation_total(rd_kafka_t *rk,
@@ -89,16 +99,9 @@ calculate_broker_avg_rtt(rd_kafka_t *rk,
                          rd_kafka_broker_t *rkb_selected,
                          rd_ts_t now_ns) {
         rd_kafka_telemetry_metric_value_t avg_rtt = RD_ZERO_INIT;
-
-        rd_avg_t *rkb_avg_rtt_rollover =
-            &rkb_selected->rkb_telemetry.rd_avg_rollover.rkb_avg_rtt;
-
-        if (rkb_avg_rtt_rollover->ra_v.cnt) {
-                avg_rtt.double_value = rkb_avg_rtt_rollover->ra_v.sum /
-                                       (double)(rkb_avg_rtt_rollover->ra_v.cnt *
-                                                THREE_ORDERS_MAGNITUDE);
-        }
-
+        avg_rtt.double_value                      = calculate_avg(
+            &rkb_selected->rkb_telemetry.rd_avg_rollover.rkb_avg_rtt,
+            THREE_ORDERS_MAGNITUDE);
         return avg_rtt;
 }
 
@@ -106,11 +109,54 @@ static rd_kafka_telemetry_metric_value_t
 calculate_broker_max_rtt(rd_kafka_t *rk,
                          rd_kafka_broker_t *rkb_selected,
                          rd_ts_t now_ns) {
-        rd_kafka_telemetry_metric_value_t max_rtt;
-
-        max_rtt.int_value = RD_CEIL_INTEGER_DIVISION(
-            rkb_selected->rkb_telemetry.rd_avg_rollover.rkb_avg_rtt.ra_v.maxv,
+        rd_kafka_telemetry_metric_value_t max_rtt = RD_ZERO_INIT;
+        max_rtt.int_value                         = calculate_max(
+            &rkb_selected->rkb_telemetry.rd_avg_rollover.rkb_avg_rtt,
             THREE_ORDERS_MAGNITUDE);
+        return max_rtt;
+}
+
+static rd_kafka_telemetry_metric_value_t
+calculate_broker_produce_avg_rtt(rd_kafka_t *rk,
+                                 rd_kafka_broker_t *rkb_selected,
+                                 rd_ts_t now_ns) {
+        rd_kafka_telemetry_metric_value_t avg_rtt = RD_ZERO_INIT;
+        avg_rtt.double_value                      = calculate_avg(
+            &rkb_selected->rkb_telemetry.rd_avg_rollover.rkb_produce_avg_rtt,
+            THREE_ORDERS_MAGNITUDE);
+        return avg_rtt;
+}
+
+static rd_kafka_telemetry_metric_value_t
+calculate_broker_produce_max_rtt(rd_kafka_t *rk,
+                                 rd_kafka_broker_t *rkb_selected,
+                                 rd_ts_t now_ns) {
+        rd_kafka_telemetry_metric_value_t max_rtt = RD_ZERO_INIT;
+        max_rtt.int_value                         = calculate_max(
+            &rkb_selected->rkb_telemetry.rd_avg_rollover.rkb_produce_avg_rtt,
+            THREE_ORDERS_MAGNITUDE);
+        return max_rtt;
+}
+
+static rd_kafka_telemetry_metric_value_t
+calculate_produce_avg_rtt(rd_kafka_t *rk,
+                          rd_kafka_broker_t *rkb_selected,
+                          rd_ts_t now_ns) {
+        rd_kafka_telemetry_metric_value_t avg_rtt = RD_ZERO_INIT;
+        avg_rtt.double_value =
+            calculate_avg(&rk->rk_telemetry.rd_avg_rollover.rk_produce_avg_rtt,
+                          THREE_ORDERS_MAGNITUDE);
+        return avg_rtt;
+}
+
+static rd_kafka_telemetry_metric_value_t
+calculate_produce_max_rtt(rd_kafka_t *rk,
+                          rd_kafka_broker_t *rkb_selected,
+                          rd_ts_t now_ns) {
+        rd_kafka_telemetry_metric_value_t max_rtt = RD_ZERO_INIT;
+        max_rtt.int_value =
+            calculate_max(&rk->rk_telemetry.rd_avg_rollover.rk_produce_avg_rtt,
+                          THREE_ORDERS_MAGNITUDE);
         return max_rtt;
 }
 
@@ -224,24 +270,30 @@ static void reset_historical_metrics(rd_kafka_t *rk, rd_ts_t now_ns) {
 
 static const rd_kafka_telemetry_metric_value_calculator_t
     PRODUCER_METRIC_VALUE_CALCULATORS[RD_KAFKA_TELEMETRY_PRODUCER_METRIC__CNT] =
-        {
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_CONNECTION_CREATION_RATE] =
-                &calculate_connection_creation_rate,
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_CONNECTION_CREATION_TOTAL] =
-                &calculate_connection_creation_total,
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_REQUEST_LATENCY_AVG] =
-                &calculate_broker_avg_rtt,
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_REQUEST_LATENCY_MAX] =
-                &calculate_broker_max_rtt,
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_AVG] =
-                &calculate_throttle_avg,
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_MAX] =
-                &calculate_throttle_max,
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_AVG] =
-                &calculate_queue_time_avg,
-            [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_MAX] =
-                &calculate_queue_time_max,
-};
+        {[RD_KAFKA_TELEMETRY_METRIC_PRODUCER_CONNECTION_CREATION_RATE] =
+             &calculate_connection_creation_rate,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_CONNECTION_CREATION_TOTAL] =
+             &calculate_connection_creation_total,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_REQUEST_LATENCY_AVG] =
+             &calculate_broker_avg_rtt,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_REQUEST_LATENCY_MAX] =
+             &calculate_broker_max_rtt,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_AVG] =
+             &calculate_throttle_avg,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_THROTTLE_TIME_MAX] =
+             &calculate_throttle_max,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_AVG] =
+             &calculate_queue_time_avg,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_RECORD_QUEUE_TIME_MAX] =
+             &calculate_queue_time_max,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_REQUEST_LATENCY_AVG] =
+             &calculate_produce_avg_rtt,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_PRODUCE_REQUEST_LATENCY_MAX] =
+             &calculate_produce_max_rtt,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_PRODUCE_REQUEST_LATENCY_AVG] =
+             &calculate_broker_produce_avg_rtt,
+         [RD_KAFKA_TELEMETRY_METRIC_PRODUCER_NODE_PRODUCE_REQUEST_LATENCY_MAX] =
+             &calculate_broker_produce_max_rtt};
 
 static const rd_kafka_telemetry_metric_value_calculator_t
     CONSUMER_METRIC_VALUE_CALCULATORS[RD_KAFKA_TELEMETRY_CONSUMER_METRIC__CNT] = {
@@ -639,6 +691,14 @@ rd_buf_t *rd_kafka_telemetry_encode_metrics(rd_kafka_t *rk) {
         }
 
         rd_kafka_dbg(rk, TELEMETRY, "PUSH", "Serializing metrics");
+        if (rk->rk_type == RD_KAFKA_PRODUCER) {
+                rd_avg_destroy(
+                    &rk->rk_telemetry.rd_avg_rollover.rk_produce_avg_rtt);
+                rd_avg_rollover(
+                    &rk->rk_telemetry.rd_avg_rollover.rk_produce_avg_rtt,
+                    &rk->rk_telemetry.rd_avg_current.rk_produce_avg_rtt);
+        }
+
         TAILQ_FOREACH(rkb, &rk->rk_brokers, rkb_link) {
                 rd_avg_destroy(&rkb->rkb_telemetry.rd_avg_rollover.rkb_avg_rtt);
                 rd_avg_rollover(&rkb->rkb_telemetry.rd_avg_rollover.rkb_avg_rtt,
@@ -653,6 +713,14 @@ rd_buf_t *rd_kafka_telemetry_encode_metrics(rd_kafka_t *rk) {
                 rd_avg_rollover(
                     &rkb->rkb_telemetry.rd_avg_rollover.rkb_avg_throttle,
                     &rkb->rkb_telemetry.rd_avg_current.rkb_avg_throttle);
+                if (rk->rk_type == RD_KAFKA_PRODUCER) {
+                        rd_avg_destroy(&rkb->rkb_telemetry.rd_avg_rollover
+                                            .rkb_produce_avg_rtt);
+                        rd_avg_rollover(&rkb->rkb_telemetry.rd_avg_rollover
+                                             .rkb_produce_avg_rtt,
+                                        &rkb->rkb_telemetry.rd_avg_current
+                                             .rkb_produce_avg_rtt);
+                }
         }
 
         int resource_attributes_count =

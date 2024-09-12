@@ -984,20 +984,33 @@ static void rd_kafka_broker_timeout_scan(rd_kafka_broker_t *rkb, rd_ts_t now) {
                         rd_avg_calc(
                             &rkb->rkb_telemetry.rd_avg_current.rkb_avg_rtt,
                             now);
+                        if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER)
+                                rd_avg_calc(&rkb->rkb_telemetry.rd_avg_current
+                                                 .rkb_produce_avg_rtt,
+                                            now);
                         if (rkb->rkb_avg_rtt.ra_v.avg)
                                 rd_snprintf(rttinfo, sizeof(rttinfo),
                                             " (average rtt %.3fms)",
                                             (float)(rkb->rkb_avg_rtt.ra_v.avg /
                                                     1000.0f));
                         else if (rkb->rkb_telemetry.rd_avg_current.rkb_avg_rtt
-                                     .ra_v.avg)
+                                     .ra_v.avg) {
                                 rd_snprintf(
                                     rttinfo, sizeof(rttinfo),
                                     " (average rtt %.3fms)",
                                     (float)(rkb->rkb_telemetry.rd_avg_current
                                                 .rkb_avg_rtt.ra_v.avg /
                                             1000.0f));
-                        else
+                                if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER)
+                                        rd_snprintf(
+                                            rttinfo, sizeof(rttinfo),
+                                            " (average rtt %.3fms)",
+                                            (float)(rkb->rkb_telemetry
+                                                        .rd_avg_current
+                                                        .rkb_produce_avg_rtt
+                                                        .ra_v.avg /
+                                                    1000.0f));
+                        } else
                                 rttinfo[0] = 0;
                         rd_kafka_broker_fail(rkb, LOG_ERR,
                                              RD_KAFKA_RESP_ERR__TIMED_OUT,
@@ -1873,6 +1886,10 @@ static rd_kafka_buf_t *rd_kafka_waitresp_find(rd_kafka_broker_t *rkb,
                 rd_avg_add(&rkb->rkb_avg_rtt, rkbuf->rkbuf_ts_sent);
                 rd_avg_add(&rkb->rkb_telemetry.rd_avg_current.rkb_avg_rtt,
                            rkbuf->rkbuf_ts_sent);
+                if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER)
+                        rd_avg_add(&rkb->rkb_telemetry.rd_avg_current
+                                        .rkb_produce_avg_rtt,
+                                   rkbuf->rkbuf_ts_sent);
 
                 if (rkbuf->rkbuf_flags & RD_KAFKA_OP_F_BLOCKING &&
                     rd_atomic32_sub(&rkb->rkb_blocking_request_cnt, 1) == 1)
@@ -4809,6 +4826,13 @@ void rd_kafka_broker_destroy_final(rd_kafka_broker_t *rkb) {
             &rkb->rkb_telemetry.rd_avg_rollover.rkb_avg_outbuf_latency);
         rd_avg_destroy(
             &rkb->rkb_telemetry.rd_avg_current.rkb_avg_outbuf_latency);
+        if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER) {
+                rd_avg_destroy(
+                    &rkb->rkb_telemetry.rd_avg_current.rkb_produce_avg_rtt);
+                rd_avg_destroy(
+                    &rkb->rkb_telemetry.rd_avg_rollover.rkb_produce_avg_rtt);
+        }
+
 
         mtx_lock(&rkb->rkb_logname_lock);
         rd_free(rkb->rkb_logname);
@@ -4921,6 +4945,14 @@ rd_kafka_broker_t *rd_kafka_broker_add(rd_kafka_t *rk,
         rd_avg_init(&rkb->rkb_telemetry.rd_avg_current.rkb_avg_outbuf_latency,
                     RD_AVG_GAUGE, 0, 100 * 1000, 2,
                     rk->rk_conf.enable_metrics_push);
+        if (rk->rk_type == RD_KAFKA_PRODUCER) {
+                rd_avg_init(
+                    &rkb->rkb_telemetry.rd_avg_current.rkb_produce_avg_rtt,
+                    RD_AVG_GAUGE, 0, 500 * 1000, 2, rd_true);
+                rd_avg_init(
+                    &rkb->rkb_telemetry.rd_avg_rollover.rkb_produce_avg_rtt,
+                    RD_AVG_GAUGE, 0, 500 * 1000, 2, rd_true);
+        }
 
         rd_refcnt_init(&rkb->rkb_refcnt, 0);
         rd_kafka_broker_keep(rkb); /* rk_broker's refcount */
