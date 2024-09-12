@@ -471,8 +471,6 @@ static void unit_test_telemetry_decoded_string(void *opaque,
                 break;
 
         case STATE_METRIC_DESCRIPTION:
-                // RD_UT_SAY("found metric description %s", decoded);
-
                 rd_snprintf(unit_test_data.metric_description,
                             sizeof(unit_test_data.metric_description), "%s",
                             decoded);
@@ -481,9 +479,6 @@ static void unit_test_telemetry_decoded_string(void *opaque,
                 break;
 
         case STATE_COMPLETE:
-                RD_UT_SAY(stderr,
-                          "Warning: Unexpected additional data after metric "
-                          "description\n");
                 break;
         }
 }
