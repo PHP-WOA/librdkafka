@@ -984,10 +984,15 @@ static void rd_kafka_broker_timeout_scan(rd_kafka_broker_t *rkb, rd_ts_t now) {
                         rd_avg_calc(
                             &rkb->rkb_telemetry.rd_avg_current.rkb_avg_rtt,
                             now);
-                        if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER)
+                        if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER) {
                                 rd_avg_calc(&rkb->rkb_telemetry.rd_avg_current
                                                  .rkb_produce_avg_rtt,
                                             now);
+                                rd_avg_calc(
+                                    &rkb->rkb_rk->rk_telemetry.rd_avg_current
+                                         .rk_produce_avg_rtt,
+                                    now);
+                        }
                         if (rkb->rkb_avg_rtt.ra_v.avg)
                                 rd_snprintf(rttinfo, sizeof(rttinfo),
                                             " (average rtt %.3fms)",
@@ -1001,7 +1006,7 @@ static void rd_kafka_broker_timeout_scan(rd_kafka_broker_t *rkb, rd_ts_t now) {
                                     (float)(rkb->rkb_telemetry.rd_avg_current
                                                 .rkb_avg_rtt.ra_v.avg /
                                             1000.0f));
-                                if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER)
+                                if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER) {
                                         rd_snprintf(
                                             rttinfo, sizeof(rttinfo),
                                             " (average rtt %.3fms)",
@@ -1010,6 +1015,15 @@ static void rd_kafka_broker_timeout_scan(rd_kafka_broker_t *rkb, rd_ts_t now) {
                                                         .rkb_produce_avg_rtt
                                                         .ra_v.avg /
                                                     1000.0f));
+                                        rd_snprintf(
+                                            rttinfo, sizeof(rttinfo),
+                                            " (average rtt %.3fms)",
+                                            (float)(rkb->rkb_rk->rk_telemetry
+                                                        .rd_avg_current
+                                                        .rk_produce_avg_rtt.ra_v
+                                                        .avg /
+                                                    1000.0f));
+                                }
                         } else
                                 rttinfo[0] = 0;
                         rd_kafka_broker_fail(rkb, LOG_ERR,
@@ -1886,10 +1900,14 @@ static rd_kafka_buf_t *rd_kafka_waitresp_find(rd_kafka_broker_t *rkb,
                 rd_avg_add(&rkb->rkb_avg_rtt, rkbuf->rkbuf_ts_sent);
                 rd_avg_add(&rkb->rkb_telemetry.rd_avg_current.rkb_avg_rtt,
                            rkbuf->rkbuf_ts_sent);
-                if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER)
+                if (rkb->rkb_rk->rk_type == RD_KAFKA_PRODUCER) {
                         rd_avg_add(&rkb->rkb_telemetry.rd_avg_current
                                         .rkb_produce_avg_rtt,
                                    rkbuf->rkbuf_ts_sent);
+                        rd_avg_add(&rkb->rkb_rk->rk_telemetry.rd_avg_current
+                                        .rk_produce_avg_rtt,
+                                   rkbuf->rkbuf_ts_sent);
+                }
 
                 if (rkbuf->rkbuf_flags & RD_KAFKA_OP_F_BLOCKING &&
                     rd_atomic32_sub(&rkb->rkb_blocking_request_cnt, 1) == 1)
