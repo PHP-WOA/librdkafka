@@ -3,6 +3,8 @@
 librdkafka v2.6.0 is a feature release.
 
 * [KIP-460](https://cwiki.apache.org/confluence/display/KAFKA/KIP-460%3A+Admin+Leader+Election+RPC) Admin Leader Election RPC (#4845)
+
+
 # librdkafka v2.5.3
 
 librdkafka v2.5.3 is a feature release.
