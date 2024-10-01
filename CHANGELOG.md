@@ -2,8 +2,7 @@
 
 librdkafka v2.6.0 is a feature release.
 
-* [KIP-460]Adds a public API ElectLeaders to start Preferred/ Unclean Election for specified Topic Partitions. (#4845)
-
+* [KIP-460](https://cwiki.apache.org/confluence/display/KAFKA/KIP-460%3A+Admin+Leader+Election+RPC) Admin Leader Election RPC (#4845)
 # librdkafka v2.5.3
 
 librdkafka v2.5.3 is a feature release.
