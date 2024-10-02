@@ -272,6 +272,7 @@ endif()
 if(WIN32)
   if(WITH_SSL)
     target_link_libraries(rdkafka PUBLIC crypt32)
+    target_link_libraries(rdkafka PUBLIC advapi32)
   endif()
 
   target_link_libraries(rdkafka PUBLIC ws2_32 secur32)
